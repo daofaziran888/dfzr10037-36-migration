@@ -81,5 +81,17 @@ npm run dev
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
 
+## 推荐引擎候选限额（v2）
+
+- 推荐规则的`候选数量`为 v1 原字面（示例数据是占位字符串），迁移后追加
+  `候选限额`（version/value/source/evidence/raw）二版带来源数据，原字段不改写。
+- `POST /api/reco_engine/migration`：存量 v1→v2 迁移，幂等可重复。
+- `GET /api/reco_engine/candidates?version=2&scene=&entity=&sync=`：候选读取，
+  返回被纳入的候选数据与被搁置的记录；v2 解码结果同步路径推理待处理清单，
+  `version=1` 回退旧版读取语义（不触发迁移，原字面与来源仍可追溯）。
+- 未知限额不落零、不放全量，按搁置留痕；同一源实体新旧结果只计入一条；
+  实际证据数量为 0 的规则不继续使用。
+- 验证脚本：`cd backend && .venv/bin/python tests/test_reco_candidates.py`。
+
 领域：数据工程
 子方向：数据分析与数据应用

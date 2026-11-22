@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.base import BaseModuleService
+from app.services.reco_engine import ingest_runtime_rule, parse_count
 from app.store import store
 
 
@@ -53,23 +54,23 @@ class PathReasonService(BaseModuleService):
         return f"推理结果已缓存 {qc_entry['条目编号']}"
 
     def _push_to_reco_engine(self, entry: dict[str, Any]) -> str:
-        rows = store.rows("reco_engine")
-        next_id = max((int(r.get("id", 0)) for r in rows), default=0) + 1
-        reco_entry: dict[str, Any] = {
-            "id": next_id,
-            "status": "草稿",
-            "pending": True,
-            "abnormal": False,
-            "规则编号": f"RECO-PATH-{next_id:04d}",
-            "推荐场景": f"路径推理关联推荐",
-            "源实体": str(entry.get("起始实体", "")),
-            "推荐算法": f"path-rank-{entry.get('推理模式','')}",
-            "候选数量": int(entry.get("路径数量", 10)) + 5,
-            "过滤条件": str(entry.get("置信阈值", "")),
-            "命中次数": "0",
-            "采纳率": "0%",
-        }
-        rows.append(reco_entry)
+        # 链路 L11：推理生成的整数候选数量，来源 inference；实际证据数量=路径数量。
+        raw_paths = entry.get("路径数量", 10)
+        paths = parse_count(raw_paths)
+        reco_entry = ingest_runtime_rule(
+            {
+                "推荐场景": "路径推理关联推荐",
+                "源实体": str(entry.get("起始实体", "")),
+                "推荐算法": f"path-rank-{entry.get('推理模式','')}",
+                "候选数量": (paths + 5) if paths is not None else raw_paths,
+                "过滤条件": str(entry.get("置信阈值", "")),
+                "命中次数": "0",
+                "采纳率": "0%",
+            },
+            source="inference",
+            evidence=paths if paths is not None else 0,
+            code_prefix="RECO-PATH",
+        )
         return f"路径推理结果推送推荐引擎 {reco_entry['规则编号']}"
 
     def domain_snapshot(self) -> dict[str, Any]:
